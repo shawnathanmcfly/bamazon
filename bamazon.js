@@ -64,8 +64,71 @@ function insertItem( item ){
                 if (err) throw err;
                 console.log(result);
             });
-        }
+        }                    
   });
+}
+
+function supervisor() {
+    inquirer.prompt([
+        {
+            type: 'list',
+            name: 'superMenu',
+            message: 'Welcome, master, how may I serve you?',
+            choices: [
+                "View Product Sales by Department",
+                "Create New Department",
+                "Quit"
+            ]
+        }
+    ]).then( answer => {
+
+        switch( answer.superMenu ){
+            case "View Product Sales by Department":
+                con.query(
+                    "SELECT departments.dept_id, \
+                    products.department, \
+                    SUM(products.product_sales) AS sales, \
+                    departments.over_head_costs, \
+                    SUM(products.product_sales) - departments.over_head_costs AS total_profits \
+                    FROM products \
+                    LEFT JOIN departments ON products.department = departments.dept_name \
+                    GROUP BY department;" , (err, result) => {
+                    
+                        if( err ) throw err;
+                        console.log("");
+                        console.table( result );
+                        supervisor();
+                });
+                break;
+            case "Create New Department":
+                inquirer.prompt([
+                    {
+                        type: 'input',
+                        name: 'deptName',
+                        message: 'What is the name of the department you would like to add?'
+                    },{
+                        type: 'input',
+                        name: 'overHead',
+                        message: 'Is there an initial overhead cost you would like to add?',
+                        default: 0
+                    }
+                ]).then( a => {
+                    var sql = "INSERT INTO departments (dept_name, over_head_costs) \
+                        VALUES ('" + a.deptName + "', '" + a.overHead + "')";
+                    con.query(sql, function (err) {
+                        if (err)
+                            console.log( "ERROR:" + err );
+                        
+                        supervisor();
+                    });
+                })
+                break;
+            default:
+                console.log( "Goodbye, master. Would you marry a computer? jw, my friend wants to know.");
+                con.end();
+                break;
+        }
+    });
 }
 
 function manager(){
@@ -188,9 +251,7 @@ function shop(){
         //adjust game selection based on what's in buyers basket
         for( let i = 0; i < result.length; i++ ){
 
-            for( let ii = 0; ii < basket.length; ii++)
-                if( basket[ii].item === result[i].product_name )
-                    result[i].stock -= basket[ii].amount;
+            
                         
             if( result[i].stock )
                 itemList.push( result[i].product_name + "   $" + result[i].price + "   In Stock: " + result[i].stock );        
@@ -221,13 +282,13 @@ function shop(){
                             }
                         }
 
+                        
+
                         if( !found ){
                             basket.push({
-
                                 item: t[0],
                                 price: parseFloat( t[1] ),
                                 amount: 1
-
                             });
                         }
                     }
@@ -241,9 +302,20 @@ function shop(){
             }
         ]).then( answers => {
 
-            if( answers.buyMore )
+            if( answers.buyMore ){
+
+                //last mysql database adjust
+                for( let i = 0; i < result.length; i++ )
+                for( let ii = 0; ii < basket.length; ii++)
+                    if( basket[ii].item === result[i].product_name ){
+                        result[i].stock -= basket[ii].amount;
+                        result[i].product_sales += basket[ii].amount * basket[ii].price;
+                        
+                    }
                 shop();
-            else{
+
+                
+            }else{
 
                 if( basket.length ){
 
@@ -256,19 +328,23 @@ function shop(){
                     //last mysql database adjust
                     for( let i = 0; i < result.length; i++ )
                         for( let ii = 0; ii < basket.length; ii++)
-                            if( basket[ii].item === result[i].product_name )
-                                result[i].stock -= basket[ii].amount;     
+                            if( basket[ii].item === result[i].product_name ){
+                                result[i].stock -= basket[ii].amount;
+                                result[i].product_sales += basket[ii].amount * basket[ii].price;
+                                
+                            }
                     
                     for( let i = 0; i < result.length; i++ ){
                         con.query( "UPDATE products SET stock = '" + result[i].stock  + 
-                            "' WHERE product_name = '" + result[i].product_name +"'", err  => {
+                            "', product_sales = '" + result[i].product_sales + "' \
+                             WHERE product_name = '" + result[i].product_name +"'", err  => {
                             if( err) throw err;
                         });
                     }
                 }
                     
                 console.log( " Thanks for stopping by, bro!" );
-
+                con.end();
             }
         });
     });
@@ -296,10 +372,10 @@ con.connect(function(err) {
             shop();
             
             break;
+        case "super":
+            supervisor();
+            break;
         case "-help":
-
-        case 
-
             //help menu
             console.log( "Coming Soon...");
             
